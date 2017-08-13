@@ -173,16 +173,16 @@ static void * KVOContext = &KVOContext;
 {
     BOOL title_is_nil = (title == nil);
     BOOL location_is_blank = [[location absoluteString] isEqualToString:@"about:blank"];
-    
+
     BOOL reload = (title_is_nil || location_is_blank);
-    
+
 #ifdef DEBUG
     NSLog(@"%@", @"CDVWKWebViewEngine shouldReloadWebView::");
     NSLog(@"CDVWKWebViewEngine shouldReloadWebView title: %@", title);
     NSLog(@"CDVWKWebViewEngine shouldReloadWebView location: %@", [location absoluteString]);
     NSLog(@"CDVWKWebViewEngine shouldReloadWebView reload: %u", reload);
 #endif
-    
+
     return reload;
 }
 
@@ -261,6 +261,19 @@ static void * KVOContext = &KVOContext;
                 }
             }
         }
+    }
+
+    // Fixes CB-10376: Make autofocus work by obeying KeyboardDisplayRequiresUserAction like UIWebView does
+    BOOL keyboardDisplayRequiresUserAction = [settings cordovaBoolSettingForKey:@"KeyboardDisplayRequiresUserAction" defaultValue:YES];
+    if (!keyboardDisplayRequiresUserAction) {
+        SEL sel = sel_getUid("_startAssistingNode:userIsInteracting:blurPreviousNode:userObject:");
+        Class WKContentView = NSClassFromString(@"WKContentView");
+        Method method = class_getInstanceMethod(WKContentView, sel);
+        IMP originalImp = method_getImplementation(method);
+        IMP imp = imp_implementationWithBlock(^void(id me, void* arg0, BOOL arg1, BOOL arg2, id arg3)
+                                              { ((void (*)(id, SEL, void*, BOOL, BOOL, id))originalImp)(me, sel, arg0, TRUE, arg2, arg3); }
+                                              );
+        method_setImplementation(method, imp);
     }
 
     NSString* decelerationSetting = [settings cordovaSettingForKey:@"WKWebViewDecelerationSpeed"];
